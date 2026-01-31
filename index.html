@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发票合并打印工具</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- PDF.js -->
+    <script src="lib/pdf.min.js"></script>
+    <!-- pdf-lib for generating PDFs -->
+    <script src="lib/pdf-lib.min.js"></script>
+    <!-- JSZip for OFD parsing -->
+    <script src="lib/jszip.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>发票合并打印工具</h1>
+            <p class="subtitle">批量上传PDF/OFD格式发票文件，选择排版方式，合并到A4纸上打印</p>
+        </header>
+
+        <!-- 步骤指示器 -->
+        <div class="steps">
+            <div class="step active" data-step="1">
+                <span class="step-number">1</span>
+                <span class="step-text">上传发票文件</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step" data-step="2">
+                <span class="step-number">2</span>
+                <span class="step-text">设置合并方式</span>
+            </div>
+            <div class="step-line"></div>
+            <div class="step" data-step="3">
+                <span class="step-number">3</span>
+                <span class="step-text">下载合并后文件</span>
+            </div>
+        </div>
+
+        <!-- 步骤1：上传文件 -->
+        <div class="panel step-panel" id="step1-panel">
+            <div class="upload-area" id="upload-area">
+                <div class="upload-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="12"></line>
+                        <line x1="9" y1="15" x2="12" y2="12"></line>
+                        <line x1="15" y1="15" x2="12" y2="12"></line>
+                    </svg>
+                </div>
+                <p class="upload-text">点击或拖动选择PDF/OFD格式发票文件（可多选）</p>
+                <p class="upload-hint">支持 PDF、OFD 格式</p>
+                <input type="file" id="file-input" multiple accept=".pdf,.ofd" hidden>
+            </div>
+
+            <!-- 已上传文件列表 -->
+            <div class="file-list" id="file-list" style="display: none;">
+                <div class="file-list-header">
+                    <h3>已上传文件 (<span id="file-count">0</span>)</h3>
+                    <button class="btn btn-text" id="clear-all-btn">清空全部</button>
+                </div>
+                <div class="file-items" id="file-items"></div>
+            </div>
+
+            <div class="panel-actions">
+                <button class="btn btn-primary" id="next-step1" disabled>下一步：设置排版</button>
+            </div>
+        </div>
+
+        <!-- 步骤2：设置排版 -->
+        <div class="panel step-panel" id="step2-panel" style="display: none;">
+            <div class="settings-grid">
+                <!-- 排版设置 -->
+                <div class="setting-group">
+                    <h3>排版设置</h3>
+                    
+                    <div class="setting-item">
+                        <label>打印方向</label>
+                        <div class="radio-group">
+                            <label class="radio-label">
+                                <input type="radio" name="orientation" value="portrait" checked>
+                                <span>纵向</span>
+                            </label>
+                            <label class="radio-label">
+                                <input type="radio" name="orientation" value="landscape">
+                                <span>横向</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="setting-item">
+                        <label>每页行数</label>
+                        <input type="number" id="rows" value="2" min="1" max="6" class="input-number">
+                    </div>
+
+                    <div class="setting-item">
+                        <label>每页列数</label>
+                        <input type="number" id="cols" value="1" min="1" max="4" class="input-number">
+                    </div>
+
+                    <div class="setting-item">
+                        <label>页边距 (mm)</label>
+                        <input type="number" id="margin" value="10" min="0" max="50" class="input-number">
+                    </div>
+
+                    <div class="setting-item">
+                        <label>发票间距 (mm)</label>
+                        <input type="number" id="gap" value="5" min="0" max="30" class="input-number">
+                    </div>
+                </div>
+
+                <!-- 辅助选项 -->
+                <div class="setting-group">
+                    <h3>辅助选项</h3>
+                    
+                    <div class="setting-item">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-border">
+                            <span>显示边框</span>
+                        </label>
+                    </div>
+
+                    <div class="setting-item">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-cut-line">
+                            <span>显示裁剪虚线</span>
+                        </label>
+                    </div>
+
+                    <div class="setting-item">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="show-page-number">
+                            <span>显示页码</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 预览 -->
+                <div class="setting-group preview-group">
+                    <h3>排版预览</h3>
+                    <div class="preview-wrapper">
+                        <div class="preview-nav">
+                            <button class="btn btn-small" id="prev-preview-page" disabled>&lt; 上一页</button>
+                            <span class="preview-page-info">第 <span id="current-preview-page">1</span> / <span id="total-preview-pages">1</span> 页</span>
+                            <button class="btn btn-small" id="next-preview-page" disabled>下一页 &gt;</button>
+                        </div>
+                        <div class="preview-container" id="preview-container">
+                            <canvas id="preview-canvas"></canvas>
+                            <div class="preview-loading" id="preview-loading" style="display: none;">
+                                <div class="spinner-small"></div>
+                                <span>生成预览...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="preview-info">
+                        每页可放置 <span id="per-page-count">2</span> 张发票，
+                        共需 <span id="total-pages">1</span> 页
+                    </p>
+                </div>
+            </div>
+
+            <div class="panel-actions">
+                <button class="btn btn-secondary" id="prev-step2">上一步</button>
+                <button class="btn btn-primary" id="next-step2">开始合并</button>
+            </div>
+        </div>
+
+        <!-- 步骤3：下载 -->
+        <div class="panel step-panel" id="step3-panel" style="display: none;">
+            <div class="result-area">
+                <div class="processing" id="processing">
+                    <div class="spinner"></div>
+                    <p>正在合并发票，请稍候...</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill"></div>
+                    </div>
+                    <p class="progress-text" id="progress-text">0%</p>
+                </div>
+
+                <div class="result-success" id="result-success" style="display: none;">
+                    <div class="success-icon">
+                        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="16 8 10 14 8 12"></polyline>
+                        </svg>
+                    </div>
+                    <h3>合并完成！</h3>
+                    <p class="result-info">共合并 <span id="result-invoice-count">0</span> 张发票，生成 <span id="result-page-count">0</span> 页</p>
+                    <button class="btn btn-primary btn-lg" id="download-btn">下载合并后的PDF</button>
+                </div>
+            </div>
+
+            <div class="panel-actions">
+                <button class="btn btn-secondary" id="restart-btn">重新开始</button>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>本地处理，文件不会上传到服务器</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
